@@ -1,0 +1,8 @@
+# 顶层依赖，版本与开发环境一致（Python 3.14.3 / Windows）
+# winocr 会连带安装 winrt-* 系列 Windows Runtime 包，无需单独指定
+Appium-Python-Client==6.0.8
+selenium==4.51.0
+pytest==9.2.0
+allure-pytest==2.16.2
+pillow==13.0.0
+winocr==0.0.15
