@@ -65,3 +65,6 @@ IMPLICIT_WAIT = 10 #隐式
 EXPLICIT_WAIT = 15 #显式
 # 领券后后台数据同步的等待上限
 SYNC_WAIT = 30
+# 比价本地耗时与后台记录允许的偏差。本地从点「开始比价」到 OCR 认出结果页，
+# 后台在结果页渲染时停表，实测差 1 秒左右。
+PRICE_DURATION_GAP = 5

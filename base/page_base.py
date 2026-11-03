@@ -1,3 +1,6 @@
+import time
+
+from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -39,11 +42,18 @@ class PageBase:
 
     def base_input_text(self, locator, text):
         log.info(f"在元素{locator}输入文本：{text}")
-        element = self.base_fd_element(locator)
-        element.click()
-        element.clear()
-        element.send_keys(text)
-        return self
+        last_error = None
+        for _ in range(3):
+            try:
+                element = self.base_fd_element(locator)
+                element.click()
+                element.clear()
+                element.send_keys(text)
+                return self
+            except StaleElementReferenceException as exc:
+                last_error = exc
+                time.sleep(0.3)
+        raise last_error
 
     def base_get_text(self, locator):
         text = self.base_fd_element(locator).text

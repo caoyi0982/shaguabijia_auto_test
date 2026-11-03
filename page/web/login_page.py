@@ -23,6 +23,8 @@ class WebLoginPage(WebBase):
         element.send_keys(Keys.CONTROL, "a")
         element.send_keys(password)
         self.base_click(self.login_button)
+        # 登录是页面自己跳的。没等到右上角用户名就去记录页，会被送回登录页。
+        self.base_fd_element(self.login_success)
 
     def get_login_result(self):
         return self.base_get_text(self.login_success)

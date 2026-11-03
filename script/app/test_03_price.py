@@ -20,4 +20,10 @@ class TestPrice:
         assert app_logged_in.current_package != DEVICE_CONFIG["appPackage"]
         chosen = price_page.compare_on_checkout(name)
         log.info(f"本次比价勾选：{chosen}")
+        ad_count, elapsed = price_page.wait_compare_result()
+        log.info(f"本次观看广告数：{ad_count}")
+        log.info(f"比价耗时：{elapsed} 秒")
         assert not chosen.startswith(name)
+        assert not name.startswith(chosen)
+        assert elapsed is not None and elapsed > 0
+        assert ad_count >= 0

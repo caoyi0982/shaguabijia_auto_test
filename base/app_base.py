@@ -49,6 +49,18 @@ class AppBase(PageBase):
             time.sleep(0.5)
         raise RuntimeError(f"屏幕上没有找到：{keyword}")
 
+    def base_click_ocr_exact(self, keyword, timeout=8):
+        # 整行必须等于这段文字。「美团」不能点到「美团外卖」。
+        end = time.time() + timeout
+        while time.time() < end:
+            for line in self.base_ocr_lines():
+                if line["text"].replace(" ", "") != keyword:
+                    continue
+                log.info(f"识别到文字：{line['text']}")
+                return self.base_click_ocr_line(line)
+            time.sleep(0.5)
+        raise RuntimeError(f"屏幕上没有找到：{keyword}")
+
     def base_click_ocr_line(self, line):
         x0, y0, x1, y1 = line["box"]
         return self.base_click_by_percent((x0 + x1) / 2, (y0 + y1) / 2)

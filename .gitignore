@@ -8,3 +8,5 @@ report/
 *.pyc
 logcat.txt
 allure-results/
+_observe/
+.screenshots/

@@ -2,18 +2,23 @@ import random
 import time
 
 from appium.webdriver.common.appiumby import AppiumBy as By
+from selenium.common.exceptions import StaleElementReferenceException
 
 from base import log
 from base.app_base import AppBase
 from config import DEVICE_CONFIG
 from vision.color import is_compare_check
+from vision.compare_watch import CompareWatch
 from vision.screen import colors_on_screen
 
 
 class PricePage(AppBase):
     _meituan_package = "com.sankuai.meituan"
+    _meituan_waimai_package = "com.sankuai.meituan.takeoutnew"
     _taobao_package = "com.taobao.taobao"
+    _ele_package = "me.ele"
     _jd_package = "com.jingdong.app.mall"
+    _jd_waimai_package = "com.jd.waimai"
     _store_keyword = "CoCo都可"
     _goods_name = "鲜芋牛奶"
     _goods_count = 2
@@ -30,19 +35,18 @@ class PricePage(AppBase):
         self.meituan_waimai = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().text("美团外卖")')
         self.taobao_shangou = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().text("淘宝闪购")')
         self.jd_waimai = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().text("京东外卖")')
-        self._main_platforms = (
+        self._platforms = (
             {"name": "美团", "code": "meituan", "click": self.meituan},
             {"name": "淘宝", "code": "taobao", "click": self.taobao},
             {"name": "京东", "code": "jd", "click": self.jd},
-        )
-        self._sub_platforms = (
             {"name": "美团外卖", "code": "meituan-waimai", "click": self.meituan_waimai},
             {"name": "淘宝闪购", "code": "taobao-shangou", "click": self.taobao_shangou},
             {"name": "京东外卖", "code": "jd-waimai", "click": self.jd_waimai},
         )
         # 美团
-        # 美团首页顶部搜索条不在输入框里。d6r 是整条搜索条，点它才会出现输入框。
-        self.mt_search = (By.ID, "com.sankuai.meituan:id/d6r")
+        # 美团首页顶部搜索条不在输入框里。search_layout_area 是整条搜索条，点它才会出现输入框。
+        # 新版首页把原来的 d6r 换成了这个 id，旧版上找不到时下面 _open_home_search 会等输入框超时。
+        self.mt_search = (By.ID, "com.sankuai.meituan:id/search_layout_area")
         self.mt_search_input = (By.ID, "com.sankuai.meituan:id/search_edit_text")
         self.mt_search_btn = (By.ID, "com.sankuai.meituan:id/search_button")
         self.mt_store = (By.ACCESSIBILITY_ID, "CoCo都可(孙河易事达店·咖啡)")
@@ -64,8 +68,8 @@ class PricePage(AppBase):
         self.tb_search = (By.ACCESSIBILITY_ID, "搜索栏")
         self.tb_search_input = (By.ID, "com.taobao.taobao:id/searchEdit")
         self.tb_search_btn = (By.ID, "com.taobao.taobao:id/searchbtn")
-        # 闪购标签没有 id。content-desc 是「闪购,未选中」，选中后后半段会变。
-        self.tb_shangou_tab = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().descriptionStartsWith("闪购,")')
+        # 首页顶部频道。综合搜索结果里的「闪购」筛选项会消失，所以先进入这个频道再搜。
+        self.tb_home_shangou = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().text("闪购")')
         # 店铺卡片没有单独店名。content-desc 以店名开头，后面是时效和月售。
         self.tb_store = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().descriptionStartsWith("CoCo都可(孙河易事达店)")')
         # 店内页是自绘的，放大镜和输入框都没有节点，只能按屏幕比例点。
@@ -77,14 +81,30 @@ class PricePage(AppBase):
         # 京东
         # 首页点「搜索栏」进入搜索页。搜索框没有 id，也没有 content-desc，这一页只有一个输入框。
         self.jd_search = (By.ACCESSIBILITY_ID, "搜索栏")
-        self.jd_search_input = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().className("android.widget.EditText")')
+        # 京东商城是 EditText，京东外卖搜索页是 AutoCompleteTextView。
+        self.jd_search_input = (
+            By.ANDROID_UIAUTOMATOR,
+            'new UiSelector().classNameMatches(".*EditText|.*AutoCompleteTextView")',
+        )
         self.jd_search_btn = (By.ACCESSIBILITY_ID, "搜索 按钮")
-        # 首页宫格「外卖」。点 content-desc 为「外卖」的外层。
-        self.jd_waimai_tab = (By.ACCESSIBILITY_ID, "外卖")
         self.jd_store = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().textContains("CoCo都可(易事达)")')
-        # 店内是小程序，放大镜 Appium 选不中。顶栏出来后按这个位置点，点开后输入框文字是「搜索店内商品」。
+        self.jd_store_full = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().textContains("CoCo都可（易事达）")')
+        self.mt_waimai_search = (By.ID, "com.sankuai.meituan.takeoutnew:id/layout_search_box_container")
+        self.mt_waimai_search_input = (
+            By.ANDROID_UIAUTOMATOR,
+            'new UiSelector().packageName("com.sankuai.meituan.takeoutnew").className("android.widget.EditText")',
+        )
+        self.mt_waimai_search_btn = (By.ID, "com.sankuai.meituan.takeoutnew:id/button_search")
+        self.jd_waimai_search_btn = (
+            By.ANDROID_UIAUTOMATOR,
+            'new UiSelector().packageName("com.jd.waimai").text("搜索")',
+        )
+        # 店内是小程序，放大镜选不中。点开后商城提示是「搜索店内商品」，外卖是「搜索商品」。
         self.jd_store_search = (0.59, 0.082)
-        self.jd_store_search_input = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().text("搜索店内商品")')
+        self.jd_store_search_input = (
+            By.ANDROID_UIAUTOMATOR,
+            'new UiSelector().textMatches("搜索(店内)?商品")',
+        )
         self.jd_goods = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().textStartsWith("鲜芋牛奶，")')
         self.jd_add_count = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().text("增加购买数量按钮")')
         # 键盘右下角的「搜索」。识字有时读不到这颗深色键，就按这个位置点。
@@ -99,32 +119,44 @@ class PricePage(AppBase):
             ("淘宝", "淘宝闪购"),
             ("京东", "京东外卖"),
         )
-        # 美团外卖
-        # 淘宝闪购
-        # 京东外卖
-
-
     def open_price_popup(self):
         # 进程还在时 noReset 不会把应用拉回前台，先激活再找控件。
         self.driver.activate_app(DEVICE_CONFIG["appPackage"])
         if self.base_exists(self.price_popup, timeout=2):
             return
         if not self.base_exists(self.go_price, timeout=3):
-            self.base_click(self.home)
-        self.base_click(self.go_price)
+            if self.base_exists(self.home, timeout=2):
+                self.base_click(self.home)
+            else:
+                self.base_click_ocr("首页")
+        if self.base_exists(self.go_price, timeout=3):
+            self.base_click(self.go_price)
+            return
+        self.base_click_ocr("去点餐")
 
-    def choose_platform(self, include_sub=False, timeout=30):
-        # include_sub 为 True 时，子平台也参与随机，六个里选一个。
-        # 为 False 时只从第一行的美团、淘宝、京东里选。
-        self.base_fd_element(self.price_popup)
-        platforms = self._main_platforms
-        if include_sub:
-            platforms = self._main_platforms + self._sub_platforms
-        platform = random.choice(platforms)
+    def choose_platform(self, timeout=30):
+        self._wait_price_popup()
+        platform = random.choice(self._platforms)
         log.info(f"选择平台：{platform['name']}")
-        self.base_click(platform["click"])
+        if self.base_exists(platform["click"], timeout=3):
+            self.base_click(platform["click"])
+        else:
+            log.info(f"控件树里没有「{platform['name']}」，改用识别点击")
+            self.base_click_ocr_exact(platform["name"])
         self._wait_jumped(timeout)
         return platform["name"]
+
+    def _wait_price_popup(self):
+        if self.base_exists(self.price_popup, timeout=2):
+            return
+        end = time.time() + 4
+        while time.time() < end:
+            for line in self.base_ocr_lines():
+                if "请选择您常用的APP" in line["text"].replace(" ", ""):
+                    log.info("控件树里没有弹窗标题，按屏幕文字继续")
+                    return
+            time.sleep(0.4)
+        raise RuntimeError("没有打开选择平台的弹窗")
 
     def search_keyword(self, keyword):
         self._focus_search_box()
@@ -138,8 +170,11 @@ class PricePage(AppBase):
         # 进对应外卖店，把鲜芋牛奶点到两份，停在结算页。不点立即支付。
         actions = {
             "美团": self._meituan_to_checkout,
+            "美团外卖": self._meituan_waimai_to_checkout,
             "淘宝": self._taobao_to_checkout,
+            "淘宝闪购": self._taobao_shangou_to_checkout,
             "京东": self._jd_to_checkout,
+            "京东外卖": self._jd_waimai_to_checkout,
         }
         action = actions.get(platform)
         if action is None:
@@ -154,9 +189,17 @@ class PricePage(AppBase):
         self.base_dismiss_coupon()
         self._open_compare_popup()
         chosen = self._select_one_compare(platform)
+        # 后台的耗时从点「开始比价」算起，这里同步打点，等结果页时停表。
+        self._compare_started_at = time.monotonic()
         self._click_overlay("开始比价")
         log.info(f"开始比价，勾选：{chosen}")
         return chosen
+
+    def wait_compare_result(self, timeout=300):
+        # 比价没有进度，只能等结果页标题。等待期间应用会自己切到别的 App 下单，
+        # 这里只截图，不能做元素定位。
+        watch = CompareWatch(started_at=getattr(self, "_compare_started_at", None), timeout=timeout)
+        return watch.wait(self.driver)
 
     def _overlay_text(self, text):
         package = DEVICE_CONFIG["appPackage"]
@@ -165,6 +208,7 @@ class PricePage(AppBase):
     def _open_compare_popup(self):
         popup = self._overlay_text("原平台")
         if self.base_exists(popup, timeout=2):
+            self._expand_compare_apps()
             return
         button = self._overlay_text("一键比价")
         if self.base_exists(button, timeout=3):
@@ -172,6 +216,20 @@ class PricePage(AppBase):
         else:
             self.base_click_ocr("一键比价")
         self.base_fd_element(popup)
+        self._expand_compare_apps()
+
+    def _expand_compare_apps(self):
+        # 浮层默认只露三个主平台，外卖子平台收在「查看所有可比价APP」里。
+        package = DEVICE_CONFIG["appPackage"]
+        expand = (
+            By.ANDROID_UIAUTOMATOR,
+            f'new UiSelector().packageName("{package}").textContains("查看所有可比价")',
+        )
+        if not self.base_exists(expand, timeout=1):
+            return
+        log.info("展开全部可比价平台")
+        self.base_click(expand)
+        time.sleep(0.5)
 
     def _compare_candidates(self, platform):
         names = []
@@ -276,12 +334,108 @@ class PricePage(AppBase):
         self.driver.terminate_app(package)
         self.driver.activate_app(package)
 
+    def _prepare_sub_app(self, package):
+        # 子平台点下去已经打开对应外卖应用，不再强制停止，避免把这次跳转清掉。
+        if self.driver.current_package != package:
+            self.driver.activate_app(package)
+        self._dismiss_blocking_popup()
+
+    def _back_until_ready(self, package, locators, limit=5):
+        for _ in range(limit):
+            if self.driver.current_package != package:
+                self.driver.activate_app(package)
+                time.sleep(0.6)
+            for locator in locators:
+                if self.base_exists(locator, timeout=1):
+                    return
+            log.info("不在可搜索的页面，返回")
+            self.base_press_back()
+            time.sleep(0.7)
+
+    def _dismiss_blocking_popup(self):
+        self.base_dismiss_coupon()
+        title = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().textContains("今日大额优惠券")')
+        close = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().text("✕")')
+        if self.base_exists(title, timeout=1) and self.base_exists(close, timeout=1):
+            log.info("关闭领券弹窗")
+            self.base_click(close)
+
+    def _click_named_store(self, exact_desc, contains):
+        exact = (By.ACCESSIBILITY_ID, exact_desc)
+        text = (By.ANDROID_UIAUTOMATOR, f'new UiSelector().textContains("{contains}")')
+        desc = (By.ANDROID_UIAUTOMATOR, f'new UiSelector().descriptionContains("{contains}")')
+        for locator in (exact, text, desc):
+            if self.base_exists(locator, timeout=2):
+                self.base_click(locator)
+                return
+        self.base_click_ocr(contains)
+
+    def _click_jd_store(self):
+        for locator in (self.jd_store, self.jd_store_full):
+            if self.base_exists(locator, timeout=2):
+                self.base_click(locator)
+                return
+        broad = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().textContains("CoCo都可")')
+        if self.base_exists(broad, timeout=2):
+            self.base_click(broad)
+            return
+        self.base_click_ocr("易事达")
+
     def _meituan_to_checkout(self):
         self._restart_platform(self._meituan_package)
-        self._open_home_search(self._meituan_package, self.mt_search, self.mt_search_input)
-        self.base_input_text(self.mt_search_input, self._store_keyword)
-        self.base_click(self.mt_search_btn)
+        self._search_meituan(self._meituan_package, self.mt_search, self.mt_search_input, self.mt_search_btn)
         self.base_click(self.mt_store)
+        self._meituan_in_store()
+
+    def _meituan_waimai_to_checkout(self):
+        # 外卖是独立应用。和美团一样：点搜索框搜店，再进店。
+        # 上次的页面可能还停在店里，店里没有首页搜索框。
+        self._prepare_sub_app(self._meituan_waimai_package)
+        self._back_until_ready(
+            self._meituan_waimai_package,
+            (self.mt_waimai_search, self.mt_waimai_search_input),
+        )
+        self._search_meituan(
+            self._meituan_waimai_package,
+            self.mt_waimai_search,
+            self.mt_waimai_search_input,
+            self.mt_waimai_search_btn,
+        )
+        self._click_named_store("CoCo都可(孙河易事达店·咖啡)", "孙河易事达店")
+        self._wait_waimai_store()
+        self._meituan_in_store()
+
+    def _wait_waimai_store(self):
+        # 点店名后搜索结果还在，那一页也有「搜索」。店内「点菜」出来再点顶栏放大镜。
+        # 进店时会盖一层「点击预订」提示，这层在的时候店内节点读不到。
+        menu = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().descriptionStartsWith("点菜")')
+        menu_text = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().text("点菜")')
+        end = time.time() + 20
+        while time.time() < end:
+            self._dismiss_waimai_reserve_tip()
+            if self.base_exists(menu, timeout=1) or self.base_exists(menu_text, timeout=1):
+                return
+        self.base_fd_element(menu)
+
+    def _dismiss_waimai_reserve_tip(self):
+        tip = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().textContains("点击预订")')
+        if not self.base_exists(tip, timeout=1):
+            return
+        element = self.driver.find_element(*tip)
+        left, top, right, bottom = self.base_bounds(element)
+        log.info("关闭预订提示")
+        self.driver.tap([(right - 50, (top + bottom) // 2)])
+        time.sleep(0.4)
+
+    def _search_meituan(self, package, search_bar, search_input, search_btn):
+        self._open_home_search(package, search_bar, search_input)
+        self.base_input_text(search_input, self._store_keyword)
+        if self.base_exists(search_btn, timeout=2):
+            self.base_click(search_btn)
+            return
+        self._click_search_word((0.86, 0.11))
+
+    def _meituan_in_store(self):
         self.base_click(self.mt_store_search)
         self.base_input_text(self.mt_store_search_input, self._goods_name)
         self.base_click(self.mt_goods_search)
@@ -299,11 +453,37 @@ class PricePage(AppBase):
 
     def _taobao_to_checkout(self):
         self._restart_platform(self._taobao_package)
-        self._open_home_search(self._taobao_package, self.tb_search, self.tb_search_input)
-        self.base_input_text(self.tb_search_input, self._store_keyword)
-        self.base_click(self.tb_search_btn)
-        self._open_taobao_shangou()
-        self.base_click(self.tb_store)
+        self._enter_taobao_shangou()
+        self._search_in_shangou()
+        self._click_taobao_store()
+        self._taobao_in_store()
+
+    def _taobao_shangou_to_checkout(self):
+        # 淘宝闪购打开的是饿了么。和淘宝一样：点搜索框搜店，再进店。
+        self._prepare_sub_app(self._ele_package)
+        self._search_ele_store()
+        time.sleep(1.5)
+        self._click_taobao_store()
+        self._taobao_in_store()
+
+    def _search_ele_store(self):
+        # 框里原来的字只是提示。点进输入框后直接打字，不会把提示搜出去。
+        # 右侧橙色「搜索」是提交按钮，先点左边输入框。
+        field = (
+            By.ANDROID_UIAUTOMATOR,
+            f'new UiSelector().packageName("{self._ele_package}").className("android.widget.EditText")',
+        )
+        if self.base_exists(field, timeout=1):
+            self.base_click(field)
+        elif self.base_exists(self.tb_search, timeout=1):
+            self.base_click(self.tb_search)
+        else:
+            self.base_click_by_percent(0.40, 0.125)
+        time.sleep(0.4)
+        self.base_type_focused(self._store_keyword)
+        self._click_search_word((0.85, 0.125))
+
+    def _taobao_in_store(self):
         time.sleep(2)
         self.base_click_by_percent(*self.tb_store_search)
         time.sleep(1)
@@ -313,20 +493,44 @@ class PricePage(AppBase):
         self._click_search_word(self.tb_search_submit)
         self._clear_ocr_cart(self.tb_cart, "淘宝")
         self.base_dismiss_coupon()
-        self._click_ocr_below(self._goods_name, "选规格", min_y=0.1)
-        self.base_click_ocr("选好了")
-        time.sleep(1)
-        self._click_taobao_plus()
-        self._click_ocr_if_present("选好了")
+        if self._click_same_row(self._goods_name, "选规格"):
+            self.base_click_ocr("选好了")
+            time.sleep(1)
+            self._click_taobao_plus()
+            self._click_ocr_if_present("选好了")
+        else:
+            # 饿了么里这款没有规格，右侧直接是加减。已经是两份就不再加。
+            count = self._row_count(self._goods_name)
+            log.info(f"商品行没有选规格，当前份数 {count}")
+            while count < self._goods_count:
+                self._click_taobao_plus()
+                time.sleep(0.6)
+                count += 1
         self.base_dismiss_coupon()
         self.base_click_ocr("去结算")
 
     def _jd_to_checkout(self):
         self._restart_platform(self._jd_package)
-        self._open_home_search(self._jd_package, self.jd_search, self.jd_search_input)
-        self.base_input_text(self.jd_search_input, self._store_keyword)
-        self.base_click(self.jd_search_btn)
-        self.base_click(self.jd_store)
+        self._search_jd(self._jd_package, self.jd_search_input, self.jd_search_btn)
+        self._click_jd_store()
+        self._jd_in_store()
+
+    def _jd_waimai_to_checkout(self):
+        # 京东外卖是独立应用。和京东一样：点搜索栏搜店，再进店。
+        self._prepare_sub_app(self._jd_waimai_package)
+        self._search_jd(self._jd_waimai_package, self.jd_search_input, self.jd_waimai_search_btn)
+        self._click_jd_store()
+        self._jd_in_store()
+
+    def _search_jd(self, package, search_input, search_btn):
+        self._open_home_search(package, self.jd_search, search_input)
+        self.base_input_text(search_input, self._store_keyword)
+        if self.base_exists(search_btn, timeout=2):
+            self.base_click(search_btn)
+            return
+        self._click_search_word(self.jd_search_submit)
+
+    def _jd_in_store(self):
         self._wait_jd_store()
         self.base_click_by_percent(*self.jd_store_search)
         self.base_input_text(self.jd_store_search_input, self._goods_name)
@@ -362,9 +566,9 @@ class PricePage(AppBase):
     def _bar_state(self):
         # 底部露出「去结算」或「差xx起送」说明车里有货。只有「起送」是空车。
         joined = "".join(line["text"] for line in self.base_ocr_lines() if line["box"][1] > 0.82)
-        if "去结算" in joined or ("差" in joined and "起送" in joined):
+        if "去结算" in joined or ("差" in joined and ("起送" in joined or "起购" in joined)):
             return "full"
-        if "起送" in joined:
+        if "起送" in joined or "起购" in joined:
             return "empty"
         return "unknown"
 
@@ -561,19 +765,39 @@ class PricePage(AppBase):
             time.sleep(0.4)
         raise RuntimeError(f"份数没有调到{count}")
 
-    def _click_ocr_below(self, title, label, min_y=0, timeout=10):
-        end = time.time() + timeout
+    def _click_same_row(self, title, label, gap=0.12):
+        # 只点同一张商品卡片上的按钮。下一行别的商品也有「选规格」。
+        end = time.time() + 8
         while time.time() < end:
             lines = self.base_ocr_lines()
-            titles = [line for line in lines if line["text"] == title and line["box"][1] >= min_y]
-            labels = [line for line in lines if line["text"] == label and titles and line["box"][1] > titles[0]["box"][1]]
-            if labels:
-                labels.sort(key=lambda line: line["box"][1])
-                log.info(f"识别到{title}下方的{label}")
-                self.base_click_ocr_line(labels[0])
-                return
-            time.sleep(0.5)
-        raise RuntimeError(f"没有找到{title}下方的{label}")
+            titles = [line for line in lines if line["text"] == title and line["box"][1] > 0.1]
+            if not titles:
+                time.sleep(0.4)
+                continue
+            top = titles[0]["box"][1]
+            labels = [
+                line for line in lines
+                if line["text"] == label and top < line["box"][1] < top + gap
+            ]
+            if not labels:
+                return False
+            log.info(f"识别到{title}同一行的{label}")
+            self.base_click_ocr_line(labels[0])
+            return True
+        return False
+
+    def _row_count(self, title):
+        lines = self.base_ocr_lines()
+        titles = [line for line in lines if line["text"] == title and line["box"][1] > 0.1]
+        if not titles:
+            return 0
+        top = titles[0]["box"][1]
+        for line in lines:
+            if line["box"][0] < 0.7 or not line["text"].isdigit():
+                continue
+            if top <= line["box"][1] <= top + 0.12:
+                return int(line["text"])
+        return 0
 
     def _click_ocr_if_present(self, keyword, timeout=4):
         end = time.time() + timeout
@@ -585,20 +809,71 @@ class PricePage(AppBase):
             time.sleep(0.4)
         return False
 
-    def _open_taobao_shangou(self):
-        # 搜索先落在综合，孙河易事达店的卡片只在闪购里。未选中时 content-desc 带「未选中」。
-        tab = self.base_fd_element(self.tb_shangou_tab)
-        if "未选中" in (tab.get_attribute("content-desc") or ""):
-            log.info("点击闪购")
-            tab.click()
-        end = time.time() + 10
+    def _click_store_card(self):
+        text = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().textContains("孙河易事达")')
+        desc = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().descriptionContains("孙河易事达")')
+        for locator in (self.tb_store, text, desc):
+            if self.base_exists(locator, timeout=1):
+                self.base_click(locator)
+                return True
+        for line in self.base_ocr_lines():
+            if "孙河易事达" not in line["text"]:
+                continue
+            log.info(f"识别到店铺：{line['text']}")
+            self.base_click_ocr_line(line)
+            return True
+        return False
+
+    def _click_taobao_store(self):
+        # 孙河易事达店有时排在第二页。当前屏先按文字点，没有再向下翻一屏。
+        if self._click_store_card():
+            return
+        log.info("第一页没有孙河易事达店，向下翻一页")
+        size = self.driver.get_window_size()
+        x = size["width"] // 2
+        self.base_swipe(x, int(size["height"] * 0.78), x, int(size["height"] * 0.28))
+        time.sleep(0.6)
+        if not self._click_store_card():
+            raise RuntimeError("没有找到孙河易事达店")
+
+    def _enter_taobao_shangou(self, timeout=20):
+        # 点首页最上面的「闪购」。搜索框里也会有这两个字，用纵坐标把频道栏和搜索框分开。
+        end = time.time() + timeout
         while time.time() < end:
-            desc = self.base_fd_element(self.tb_shangou_tab).get_attribute("content-desc") or ""
-            if "未选中" not in desc:
-                log.info(f"已进入闪购：{desc}")
+            if self.driver.current_package != self._taobao_package:
+                time.sleep(0.4)
+                continue
+            height = self.driver.get_window_size()["height"]
+            tabs = []
+            for tab in self.driver.find_elements(*self.tb_home_shangou):
+                try:
+                    top = self.base_bounds(tab)[1]
+                except StaleElementReferenceException:
+                    continue
+                if top < height * 0.16:
+                    tabs.append((top, tab))
+            if tabs:
+                tabs.sort(key=lambda item: item[0])
+                log.info("点击首页闪购")
+                tabs[0][1].click()
+                time.sleep(1)
                 return
-            time.sleep(0.3)
-        raise RuntimeError("没有进入淘宝闪购")
+            time.sleep(0.4)
+        raise RuntimeError("没有找到首页闪购")
+
+    def _search_in_shangou(self):
+        # 闪购频道的「搜索栏」点开后是自绘页，没有 searchEdit。键盘已经聚焦，直接打字再点顶栏「搜索」。
+        if self.base_exists(self.tb_search, timeout=3):
+            log.info("点击闪购搜索栏")
+            self.base_click(self.tb_search)
+        if self.base_exists(self.tb_search_input, timeout=2):
+            self.base_input_text(self.tb_search_input, self._store_keyword)
+            self.base_click(self.tb_search_btn)
+            return
+        time.sleep(0.4)
+        log.info("向闪购搜索框输入")
+        self.base_type_focused(self._store_keyword)
+        self._click_search_word((0.86, 0.11))
 
     def _click_taobao_plus(self):
         # 加号画在商品名右下方，识字读不到这个符号。相对店名标题点它，会再次打开规格。
@@ -610,17 +885,20 @@ class PricePage(AppBase):
         self.base_click_by_percent(0.92, y)
 
     def _wait_jd_store(self, timeout=20):
-        # 搜索结果里的店名一点就进小程序，顶栏的「自提」出来后才能点放大镜。
+        # 商城进店是小程序。京东外卖也是这个小程序页，顶栏有「配送 / 自提」，
+        # 位置比首页频道低，所以进了小程序后放宽到屏幕上方 40%。
         end = time.time() + timeout
         while time.time() < end:
             activity = self.driver.current_activity or ""
-            if "MantoLightActivity" not in activity:
+            in_store = "MantoLightActivity" in activity
+            if not in_store and self.driver.current_package != self._jd_waimai_package:
                 time.sleep(0.4)
                 continue
+            limit = 0.40 if in_store else 0.15
             for line in self.base_ocr_lines():
-                # 「配送」和「自提」经常被读成同一行，不能只认单独的「自提」。
-                if "自提" in line["text"] and line["box"][1] < 0.15:
+                if "自提" in line["text"] and line["box"][1] < limit:
                     return
+            time.sleep(0.4)
         raise RuntimeError("没有进入京东门店")
 
     def _click_jd_quantity_plus(self):

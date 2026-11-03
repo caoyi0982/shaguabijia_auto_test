@@ -3,7 +3,7 @@ import pytest
 import allure
 
 from base import log
-from config import APP_SMS_CODE, COUPON_USER_PHONE, WEB_ADMIN_PASSWORD, WEB_ADMIN_USERNAME
+from config import WEB_ADMIN_PASSWORD, WEB_ADMIN_USERNAME
 from page.app.login_page import LoginPage
 from page.web.login_page import WebLoginPage
 from tools import start_app_driver, start_web_driver
@@ -32,7 +32,7 @@ def web_driver():
 
 @pytest.fixture
 def app_logged_in(app_driver):
-    LoginPage(app_driver).login(COUPON_USER_PHONE, APP_SMS_CODE)
+    LoginPage(app_driver).require_logged_in()
     return app_driver
 
 

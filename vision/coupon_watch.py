@@ -2,6 +2,7 @@ import re
 import time
 
 from base import log
+from vision.ad_watch import AdCounter
 from vision.color import is_coupon_result
 from vision.ocr import recognize_box
 from vision.screen import colors_in_png
@@ -12,14 +13,9 @@ class CouponWatch:
         self.started_at = started_at
         self.done_points = done_points
         self.ad_box = ad_box
-        self.ad_grace = ad_grace
+        self.ads = AdCounter(grace=ad_grace)
         self.count_box = count_box
         self.progress_box = progress_box
-        self.ad_count = 0
-        self._in_ad = False
-        self._ad_seconds = None
-        self._ad_deadline = None
-        self._ad_misses = 0
         self.coupon_count = None
         self._progress_count = None
         self._progress_finished_at = None
@@ -46,21 +42,21 @@ class CouponWatch:
                 elapsed = self._coupon_elapsed(seen_at)
                 popup_elapsed = self._elapsed_until(seen_at)
                 log.info(f"检测到领券结果弹窗：{colors}")
-                log.info(f"本次进入广告数：{self.ad_count}")
+                log.info(f"本次进入广告数：{self.ads.count}")
                 log.info(f"领券耗时：{elapsed} 秒")
                 log.info(f"结果弹窗耗时：{popup_elapsed} 秒")
                 log.info(f"领到张数：{self._coupon_count_text()}")
-                return "领券完成", self.ad_count, elapsed, self.coupon_count
-            if not saw_countdown and not self._in_ad:
+                return "领券完成", self.ads.count, elapsed, self.coupon_count
+            if not saw_countdown and not self.ads.in_ad:
                 self._observe_progress_count(png, seen_at)
             time.sleep(0.3)
         elapsed = self._coupon_elapsed(time.monotonic())
         log.error(
-            f"等待领券完成超时，已进入广告 {self.ad_count} 个，"
+            f"等待领券完成超时，已进入广告 {self.ads.count} 个，"
             f"耗时 {elapsed} 秒，领到张数 {self._coupon_count_text()}，最后一次颜色：{last_colors}"
         )
         raise TimeoutError(
-            f"等待领券完成超时，已进入广告 {self.ad_count} 个，"
+            f"等待领券完成超时，已进入广告 {self.ads.count} 个，"
             f"耗时 {elapsed} 秒，领到张数 {self._coupon_count_text()}"
         )
 
@@ -96,30 +92,10 @@ class CouponWatch:
         log.info(f"领到张数：{count}")
 
     def _observe_ad(self, png, seen_at):
-        return self._note_ad_countdown(self._read_ad_countdown(png), seen_at)
-
-    def _note_ad_countdown(self, seconds, seen_at):
-        # 倒计时还没到点时，识别失败不算离开这条广告，避免漏看一次就把下一次读数当成新广告。
-        if seconds is None:
-            self._ad_misses += 1
-            if self._ad_expired(seen_at) and self._ad_misses >= 2:
-                self._in_ad = False
-                self._ad_seconds = None
-            return False
-        self._ad_misses = 0
-        entered = (not self._in_ad) or self._ad_expired(seen_at) or seconds > self._ad_seconds
-        self._in_ad = True
-        self._ad_seconds = seconds
-        self._ad_deadline = seen_at + seconds + self.ad_grace
-        if not entered:
-            return True
-        self.ad_count += 1
-        log.info(f"进入新广告，当前广告数：{self.ad_count}，倒计时 {seconds} 秒")
-        return True
-
-    def _ad_expired(self, seen_at):
-        deadline = self._ad_deadline
-        return self._in_ad and deadline is not None and seen_at > deadline
+        seconds = self._read_ad_countdown(png)
+        self.ads.observe(seconds, seen_at)
+        # 调用方用返回值区分「这帧在广告里」，不是「有没有进入新广告」。
+        return seconds is not None
 
     def _read_ad_countdown(self, png):
         match = re.search(r"再看(\d+)秒", recognize_box(png, self.ad_box))
