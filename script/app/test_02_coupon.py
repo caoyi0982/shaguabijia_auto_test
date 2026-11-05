@@ -19,6 +19,8 @@ class TestCoupon:
         log.info(f"本次进入广告数：{ad_count}")
         log.info(f"领券耗时：{elapsed} 秒")
         log.info(f"领到张数：{coupon_count if coupon_count is not None else '未读到'}")
+        log.info(f"取消平台数：实际「{len(cancelled)}」，期望「1」，对比结果：{'一致' if len(cancelled) == 1 else '不一致'}")
+        log.info(f"领券结果：实际「{result}」，期望「领券完成」，对比结果：{'一致' if result == '领券完成' else '不一致'}")
         assert len(cancelled) == 1
         # assert len(cancelled) == 2
         # assert cancelled == []

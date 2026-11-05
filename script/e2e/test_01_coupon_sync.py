@@ -43,6 +43,21 @@ class TestCouponSync:
         record_page.open_coupon_record()
         record = record_page.wait_completed_since(COUPON_USER_PHONE, since, SYNC_WAIT)
         log.info(f"后台领券记录：{record}")
+        spent = record["耗时"]
+        duration_ok = (
+            elapsed is not None
+            and spent is not None
+            and abs(spent - elapsed) <= DURATION_GAP
+        )
+        log.info(f"取消平台数：实际「{len(cancelled)}」，期望「1」，对比结果：{'一致' if len(cancelled) == 1 else '不一致'}")
+        log.info(f"领券结果：实际「{result}」，期望「领券完成」，对比结果：{'一致' if result == '领券完成' else '不一致'}")
+        log.info(f"领到张数已取到：实际「{coupon_count}」，期望「有值」，对比结果：{'一致' if coupon_count is not None else '不一致'}")
+        log.info(f"本地领券耗时已取到：实际「{elapsed}」，期望「有值」，对比结果：{'一致' if elapsed is not None else '不一致'}")
+        log.info(f"领券状态：实际「{record['状态']}」，期望「完成」，对比结果：{'一致' if record['状态'] == '完成' else '不一致'}")
+        log.info(f"领券平台：实际「{record['领券平台']}」，期望「{coupon_codes}」，对比结果：{'一致' if record['领券平台'] == coupon_codes else '不一致'}")
+        log.info(f"领到张数：实际「{record['领到张数']}」，期望「{coupon_count}」，对比结果：{'一致' if record['领到张数'] == coupon_count else '不一致'}")
+        log.info(f"观看广告数：实际「{record['观看广告数']}」，期望「{ad_count}」，对比结果：{'一致' if record['观看广告数'] == ad_count else '不一致'}")
+        log.info(f"本次领券实际耗时：{elapsed}，后台显示耗时：{spent}，对比结果：{'一致' if duration_ok else '不一致'}")
         assert record["状态"] == "完成"
         assert record["领券平台"] == coupon_codes
         assert record["领到张数"] == coupon_count

@@ -37,8 +37,8 @@ class AppBase(PageBase):
     def base_ocr_lines(self):
         return recognize_lines(self.driver.get_screenshot_as_png())
 
-    def base_click_ocr(self, keyword, timeout=8):
-        # 点屏幕上包含这段文字的第一行。文字中间的空格会先去掉再比较。
+    def base_click_ocr(self, keyword, timeout=8, required=True):
+        # 点屏幕上包含这段文字的第一行。required 为 False 时，找不到就返回 False。
         end = time.time() + timeout
         while time.time() < end:
             for line in self.base_ocr_lines():
@@ -47,18 +47,32 @@ class AppBase(PageBase):
                 log.info(f"识别到文字：{line['text']}")
                 return self.base_click_ocr_line(line)
             time.sleep(0.5)
+        if not required:
+            return False
         raise RuntimeError(f"屏幕上没有找到：{keyword}")
 
-    def base_click_ocr_exact(self, keyword, timeout=8):
+    def base_click_ocr_exact(self, keyword, timeout=8, required=True, bottom=False):
         # 整行必须等于这段文字。「美团」不能点到「美团外卖」。
+        # bottom 为 True 时点屏幕上最靠下的那一行。required 为 False 时，找不到就返回 False。
         end = time.time() + timeout
         while time.time() < end:
-            for line in self.base_ocr_lines():
-                if line["text"].replace(" ", "") != keyword:
-                    continue
-                log.info(f"识别到文字：{line['text']}")
-                return self.base_click_ocr_line(line)
+            lines = self.base_ocr_lines()
+            if bottom:
+                hits = [line for line in lines if line["text"].replace(" ", "") == keyword]
+                if hits:
+                    hits.sort(key=lambda line: line["box"][1])
+                    chosen = hits[-1]
+                    log.info(f"识别到文字：{chosen['text']}")
+                    return self.base_click_ocr_line(chosen)
+            else:
+                for line in lines:
+                    if line["text"].replace(" ", "") != keyword:
+                        continue
+                    log.info(f"识别到文字：{line['text']}")
+                    return self.base_click_ocr_line(line)
             time.sleep(0.5)
+        if not required:
+            return False
         raise RuntimeError(f"屏幕上没有找到：{keyword}")
 
     def base_click_ocr_line(self, line):

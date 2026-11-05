@@ -16,4 +16,5 @@ class TestAdminLogin:
         login_page.login(WEB_ADMIN_USERNAME, WEB_ADMIN_PASSWORD)
         result = login_page.get_login_result()
         log.info(f"后台登录结果：{result}")
+        log.info(f"后台登录账号：实际「{result}」，期望「包含{WEB_ADMIN_USERNAME}」，对比结果：{'一致' if WEB_ADMIN_USERNAME in result else '不一致'}")
         assert WEB_ADMIN_USERNAME in result

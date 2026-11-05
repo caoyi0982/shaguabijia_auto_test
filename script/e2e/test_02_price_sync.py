@@ -61,12 +61,37 @@ class TestPriceSync:
         finally:
             web_driver.quit()
         log.info(f"后台比价记录：{record}")
+        expected_store = STORE_NAMES.get(_platform_family(name))
+        if expected_store is None:
+            store_ok = "CoCo都可" in (record["店"] or "") and "易事达" in (record["店"] or "")
+            expected_store_text = "包含CoCo都可和易事达"
+        else:
+            store_ok = _fold_brackets(record["店"]) == _fold_brackets(expected_store)
+            expected_store_text = expected_store
+        expected_goods = GOODS_NAMES[_platform_family(name)]
+        spent = record["耗时"]
+        pause = record["暂停时间"] or 0
+        if spent is None or elapsed is None:
+            duration_ok = False
+        else:
+            gap = min(abs(spent - elapsed), abs(spent + pause - elapsed))
+            duration_ok = gap <= PRICE_DURATION_GAP
+        log.info(f"原平台与对比平台不同：实际「{name} / {chosen}」，期望「不同」，对比结果：{'一致' if not chosen.startswith(name) and not name.startswith(chosen) else '不一致'}")
+        log.info(f"本地比价耗时已取到：实际「{elapsed}」，期望「有值」，对比结果：{'一致' if elapsed is not None else '不一致'}")
+        log.info(f"本次观看广告数有效：实际「{ad_count}」，期望「大于等于0」，对比结果：{'一致' if ad_count >= 0 else '不一致'}")
+        log.info(f"执行状态：实际「{record['执行状态']}」，期望「执行成功」，对比结果：{'一致' if record['执行状态'] == '执行成功' else '不一致'}")
+        log.info(f"原平台：实际「{record['原平台']}」，期望「{name}」，对比结果：{'一致' if record['原平台'] == name else '不一致'}")
+        log.info(f"店铺：实际「{record['店']}」，期望「{expected_store_text}」，对比结果：{'一致' if store_ok else '不一致'}")
+        log.info(f"商品：实际「{record['商品']}」，期望「以{expected_goods}开头」，对比结果：{'一致' if (record['商品'] or '').startswith(expected_goods) else '不一致'}")
+        log.info(f"观看广告数：实际「{record['观看广告数']}」，期望「{ad_count}」，对比结果：{'一致' if record['观看广告数'] == ad_count else '不一致'}")
+        log.info(f"本次比价实际耗时：{elapsed}，后台显示耗时：{spent}，暂停时间：{pause}，对比结果：{'一致' if duration_ok else '不一致'}")
         assert record["执行状态"] == "执行成功"
         assert record["原平台"] == name
         _assert_store(name, record["店"])
         assert record["商品"].startswith(GOODS_NAMES[_platform_family(name)])
         assert record["观看广告数"] == ad_count
         _assert_duration(record, elapsed)
+
 
 
 def _platform_family(name):

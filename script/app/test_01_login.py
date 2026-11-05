@@ -18,4 +18,5 @@ class TestLogin:
         time.sleep(2)
         result = login_page.click_login_success()
         log.info(f"登录结果：{result}")
+        log.info(f"登录昵称：实际「{result}」，期望「{APP_NICKNAME}」，对比结果：{'一致' if result == APP_NICKNAME else '不一致'}")
         assert result == APP_NICKNAME
