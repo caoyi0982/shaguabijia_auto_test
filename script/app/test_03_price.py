@@ -20,9 +20,12 @@ class TestPrice:
         ad_count, elapsed = price_page.wait_compare_result()
         log.info(f"本次观看广告数：{ad_count}")
         log.info(f"比价耗时：{elapsed} 秒")
-        log.info(f"原平台与对比平台不同：实际「{name} / {chosen}」，期望「不同」，对比结果：{'一致' if not chosen.startswith(name) and not name.startswith(chosen) else '不一致'}")
-        log.info(f"比价耗时：实际「{elapsed}」，期望「大于0」，对比结果：{'一致' if elapsed is not None and elapsed > 0 else '不一致'}")
-        log.info(f"本次观看广告数：实际「{ad_count}」，期望「大于等于0」，对比结果：{'一致' if ad_count >= 0 else '不一致'}")
+        platform_ok = not chosen.startswith(name) and not name.startswith(chosen)
+        duration_ok = elapsed is not None and elapsed > 0
+        log.info("------开始对比结果------")
+        log.info(f"比价平台：期望「与{name}不同」，实际「{chosen}」，对比结果：{'✅一致' if platform_ok else '❌️不一致'}")
+        log.info(f"比价耗时：期望「大于0」，实际「{elapsed}」，对比结果：{'✅️一致' if duration_ok else '❌️不一致'}")
+        log.info(f"观看广告数：期望「大于等于0」，实际「{ad_count}」，对比结果：{'✅一致' if ad_count >= 0 else '❌️不一致'}")
         assert not chosen.startswith(name)
         assert not name.startswith(chosen)
         assert elapsed is not None and elapsed > 0

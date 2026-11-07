@@ -1,13 +1,16 @@
 import time
 
 from appium.webdriver.common.appiumby import AppiumBy as By
+from selenium.common.exceptions import StaleElementReferenceException
 
 from base import log
 
 
 class JdPrice:
-    # 首页点「搜索栏」进入搜索页。搜索框没有 id，也没有 content-desc，这一页只有一个输入框。
+    # 秒送页点「搜索栏」进入搜索页。搜索框没有 id，也没有 content-desc，这一页只有一个输入框。
     jd_search = (By.ACCESSIBILITY_ID, "搜索栏")
+    # 首页顶部频道。商城首页搜索是全站商品，先进入秒送再搜店。
+    jd_home_miaosong = (By.ANDROID_UIAUTOMATOR, 'new UiSelector().text("秒送")')
     # 京东商城是 EditText，京东外卖搜索页是 AutoCompleteTextView。
     jd_search_input = (
         By.ANDROID_UIAUTOMATOR,
@@ -35,6 +38,7 @@ class JdPrice:
 
     def _jd_to_checkout(self):
         self._restart_platform(self._jd_package)
+        self._enter_jd_miaosong()
         self._search_store(
             self._jd_package,
             self.jd_search,
@@ -46,7 +50,7 @@ class JdPrice:
         self._jd_in_store()
 
     def _jd_waimai_to_checkout(self):
-        # 京东外卖是独立应用。和京东一样：点搜索栏搜店，再进店。
+        # 京东外卖首页就是外卖。点搜索栏搜店，再进店。
         self._prepare_sub_app(self._jd_waimai_package)
         self._search_store(
             self._jd_waimai_package,
@@ -57,6 +61,31 @@ class JdPrice:
         )
         self._click_jd_store()
         self._jd_in_store()
+
+    def _enter_jd_miaosong(self, timeout=20):
+        # 点首页最上面的「秒送」。搜索框里也可能有这两个字，用纵坐标把频道栏和搜索框分开。
+        end = time.time() + timeout
+        while time.time() < end:
+            if self.driver.current_package != self._jd_package:
+                time.sleep(0.4)
+                continue
+            height = self.driver.get_window_size()["height"]
+            tabs = []
+            for tab in self.driver.find_elements(*self.jd_home_miaosong):
+                try:
+                    top = self.base_bounds(tab)[1]
+                except StaleElementReferenceException:
+                    continue
+                if top < height * 0.16:
+                    tabs.append((top, tab))
+            if tabs:
+                tabs.sort(key=lambda item: item[0])
+                log.info("点击首页秒送")
+                tabs[0][1].click()
+                time.sleep(1)
+                return
+            time.sleep(0.4)
+        raise RuntimeError("没有找到首页秒送")
 
     def _jd_in_store(self):
         self._wait_jd_store()

@@ -76,15 +76,12 @@ class TestPriceSync:
         else:
             gap = min(abs(spent - elapsed), abs(spent + pause - elapsed))
             duration_ok = gap <= PRICE_DURATION_GAP
-        log.info(f"原平台与对比平台不同：实际「{name} / {chosen}」，期望「不同」，对比结果：{'一致' if not chosen.startswith(name) and not name.startswith(chosen) else '不一致'}")
-        log.info(f"本地比价耗时已取到：实际「{elapsed}」，期望「有值」，对比结果：{'一致' if elapsed is not None else '不一致'}")
-        log.info(f"本次观看广告数有效：实际「{ad_count}」，期望「大于等于0」，对比结果：{'一致' if ad_count >= 0 else '不一致'}")
-        log.info(f"执行状态：实际「{record['执行状态']}」，期望「执行成功」，对比结果：{'一致' if record['执行状态'] == '执行成功' else '不一致'}")
-        log.info(f"原平台：实际「{record['原平台']}」，期望「{name}」，对比结果：{'一致' if record['原平台'] == name else '不一致'}")
-        log.info(f"店铺：实际「{record['店']}」，期望「{expected_store_text}」，对比结果：{'一致' if store_ok else '不一致'}")
-        log.info(f"商品：实际「{record['商品']}」，期望「以{expected_goods}开头」，对比结果：{'一致' if (record['商品'] or '').startswith(expected_goods) else '不一致'}")
-        log.info(f"观看广告数：实际「{record['观看广告数']}」，期望「{ad_count}」，对比结果：{'一致' if record['观看广告数'] == ad_count else '不一致'}")
-        log.info(f"本次比价实际耗时：{elapsed}，后台显示耗时：{spent}，暂停时间：{pause}，对比结果：{'一致' if duration_ok else '不一致'}")
+        log.info("------开始对比结果------")
+        log.info(f"原平台：期望「{name}」，实际「{record['原平台']}」，对比结果：{'✅️一致' if record['原平台'] == name else '❌️不一致'}")
+        log.info(f"店铺：期望「{expected_store_text}」，实际「{record['店']}」，对比结果：{'✅️一致' if store_ok else '❌️不一致'}")
+        log.info(f"商品：期望「以{expected_goods}开头」，实际「{record['商品']}」，对比结果：{'✅️一致' if (record['商品'] or '').startswith(expected_goods) else '❌️不一致'}")
+        log.info(f"观看广告数：期望「{ad_count}」，实际「{record['观看广告数']}」，对比结果：{'✅️一致' if record['观看广告数'] == ad_count else '❌️不一致'}")
+        log.info(f"比价耗时：期望「{elapsed}」，实际「{spent}」，暂停时间：{pause}，对比结果：{'✅️一致' if duration_ok else '❌️不一致'}")
         assert record["执行状态"] == "执行成功"
         assert record["原平台"] == name
         _assert_store(name, record["店"])
